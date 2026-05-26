@@ -2,7 +2,10 @@
 
 import React, { createContext, useState, useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { toast } from "sonner";
 import { db, type Book } from "../db";
+import { supabase } from "../supabase";
+import { migrateGuestData, syncAll } from "../sync";
 
 export interface BookContextType {
   activeBookId: string | null;
@@ -55,6 +58,35 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
     }
   }, [books, activeBookId, isMounted]);
 
+  // Supabase Auth listener for seamless migration and synchronization
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        try {
+          const guestBooksCount = await db.books.filter((b) => b.user_id === null).count();
+          if (guestBooksCount > 0) {
+            toast.promise(migrateGuestData(session.user.id), {
+              loading: "Memindahkan data lokal Anda ke cloud...",
+              success: "Migrasi data berhasil! Semua data tersinkronisasi ke Cloud.",
+              error: "Gagal memigrasi data lokal ke cloud.",
+            });
+          } else {
+            // Standard sync pull/push
+            syncAll(session.user.id).catch((err) => console.error("Auto sync failed:", err));
+          }
+        } catch (err) {
+          console.error("Auth state change handler failed:", err);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isMounted]);
+
   const switchBook = (id: string) => {
     setActiveBookId(id);
     localStorage.setItem("active_book_id", id);
@@ -76,3 +108,4 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
     </BookContext.Provider>
   );
 }
+

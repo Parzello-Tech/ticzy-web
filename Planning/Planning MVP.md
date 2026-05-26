@@ -114,22 +114,22 @@ gantt
 ### MILESTONE 1: Pondasi & Manajemen State Lokal (Offline-First Basis)
 *   **Tujuan**: Membangun mesin database lokal di browser dan manajemen status reaktif global.
 *   **Daftar Tugas**:
-    1. `[ ]` Instalasi dependensi baru: `dexie` dan `dexie-react-hooks`.
-    2. `[ ]` Membuat berkas konfigurasi IndexedDB `lib/db.ts` dengan schema `books` dan `transactions`.
-    3. `[ ]` Membuat helper CRUD (Create, Read, Update, Delete) lokal untuk manipulasi data instan.
-    4. `[ ]` Integrasi manajemen state global (misalnya menggunakan React Context atau Zustand) untuk melacak Buku yang Aktif secara global (`activeBookId`).
+    1. `[x]` Instalasi dependensi baru: `dexie` dan `dexie-react-hooks`.
+    2. `[x]` Membuat berkas konfigurasi IndexedDB `lib/db.ts` dengan schema `books` dan `transactions`.
+    3. `[x]` Membuat helper CRUD (Create, Read, Update, Delete) lokal untuk manipulasi data instan.
+    4. `[x]` Integrasi manajemen state global (misalnya menggunakan React Context atau Zustand) untuk melacak Buku yang Aktif secara global (`activeBookId`).
 *   **Kriteria Selesai**: Aplikasi web dapat dijalankan dan mampu melakukan penyimpanan data buku & transaksi ke IndexedDB browser secara lokal, instan, dan persisten (data tidak hilang saat di-refresh).
 
 ### MILESTONE 2: Integrasi Cloud (Supabase) & Sync Engine
 *   **Tujuan**: Mengaktifkan sinkronisasi otomatis lokal-ke-cloud dua arah serta penanganan login user.
 *   **Daftar Tugas**:
-    1. `[ ]` Setup konfigurasi client Supabase di `lib/supabase.ts` menggunakan *environment variables*.
-    2. `[ ]` Membuat modul sinkronisasi `lib/sync.ts` dengan fungsionalitas:
+    1. `[x]` Setup konfigurasi client Supabase di `lib/supabase.ts` menggunakan *environment variables*.
+    2. `[x]` Membuat modul sinkronisasi `lib/sync.ts` dengan fungsionalitas:
         *   **Push**: Mendorong data dengan `is_synced = 0` secara berkelompok (batching 50 item) ke Supabase.
         *   **Pull**: Mengunduh data terbaru dari Supabase dan memperbarui IndexedDB lokal dengan taktik *Conflict Overwrite* (data terbaru menang).
         *   **Soft-delete handling**: Mendorong penghapusan ke Cloud terlebih dahulu sebelum menghapus baris dari IndexedDB lokal.
-    3. `[ ]` Implementasi fitur **Guest to User Migration**: Logika otomatis yang mengunggah seluruh buku dan transaksi tamu (Guest) ke Supabase setelah pengguna sukses masuk menggunakan akun Google.
-    4. `[ ]` Integrasi Supabase Auth di halaman Login (`/login`) dengan UI shadcn elegan.
+    3. `[x]` Implementasi fitur **Guest to User Migration**: Logika otomatis yang mengunggah seluruh buku dan transaksi tamu (Guest) ke Supabase setelah pengguna sukses masuk menggunakan akun Google.
+    4. `[x]` Integrasi Supabase Auth di halaman Login (`/login`) dengan UI shadcn elegan.
 *   **Kriteria Selesai**: Pengguna dapat masuk menggunakan Google. Data lokal Guest berhasil bermigrasi secara otomatis saat login pertama kali, dan sinkronisasi data ke database PostgreSQL Supabase berjalan sukses di balik layar.
 
 ### MILESTONE 3: Pembangunan Core Dashboard & Data Table UI
