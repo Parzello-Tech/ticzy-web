@@ -60,31 +60,31 @@ const sidebarData = {
       icon: <IconDashboard />,
     },
     {
-      title: "Lifecycles",
-      url: "#",
+      title: "Rekap Bulanan",
+      url: "/dashboard/rekap",
+      icon: <IconChartBar />,
+    },
+    {
+      title: "Pembersih Duplikat",
+      url: "/dashboard/similar",
       icon: <IconListDetails />,
     },
     {
-      title: "Analytics",
-      url: "#",
-      icon: <IconChartBar />,
+      title: "Keranjang Sampah",
+      url: "/dashboard/trash",
+      icon: <IconTrash />,
     },
   ],
   navSecondary: [
     {
-      title: "Pengaturan",
-      url: "#",
+      title: "Ekspor & Impor",
+      url: "/dashboard/export",
       icon: <IconSettings />,
     },
     {
       title: "Bantuan",
       url: "#",
       icon: <IconHelp />,
-    },
-    {
-      title: "Pencarian",
-      url: "#",
-      icon: <IconSearch />,
     },
   ],
 }

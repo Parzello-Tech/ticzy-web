@@ -100,15 +100,15 @@ gantt
     title Jadwal Pengembangan Ticzy Finance Web MVP
     dateFormat  YYYY-MM-DD
     section Milestone 1
-    Pondasi & Local DB           :active, m1, 2026-05-27, 4d
+    Pondasi & Local DB           :done, m1, 2026-05-27, 4d
     section Milestone 2
-    Auth & Sync Engine          : m2, after m1, 5d
+    Auth & Sync Engine          :done, m2, after m1, 5d
     section Milestone 3
-    Dashboard & Data Table UI    : m3, after m2, 5d
+    Dashboard & Data Table UI    :done, m3, after m2, 5d
     section Milestone 4
-    Statistik, Trash & Ex-Im     : m4, after m3, 4d
+    Statistik, Trash & Ex-Im     :done, m4, after m3, 4d
     section Milestone 5
-    Settings, Polishing & QA     : m5, after m4, 3d
+    Settings, Polishing & QA     :active, m5, after m4, 3d
 ```
 
 ### MILESTONE 1: Pondasi & Manajemen State Lokal (Offline-First Basis)
@@ -148,10 +148,10 @@ gantt
 ### MILESTONE 4: Fitur Lanjutan (Statistik, Trash, & Ekspor-Impor)
 *   **Tujuan**: Menyelesaikan fitur analitis keuangan, pemulihan data, serta portabilitas data cadangan.
 *   **Daftar Tugas**:
-    1. `[ ]` Membangun halaman **Rekap Keuangan** (`/dashboard/rekap`) menggunakan grafik area/batang interaktif dari recharts (`components/chart-area-interactive.tsx`) untuk melacak performa keuangan 6 bulan terakhir.
-    2. `[ ]` Membuat halaman **Similar Transactions** (`/dashboard/similar`) untuk mencari pencatatan ganda atau pengeluaran berulang dengan deskripsi yang sama.
-    3. `[ ]` Mengimplementasikan **Trash Page** (`/dashboard/trash`) untuk memulihkan buku berstatus `is_deleted = 1` dengan pengecekan batas (maksimal 2 buku aktif untuk pengguna non-premium).
-    4. `[ ]` Membuat modul **Export & Import Review**:
+    1. `[x]` Membangun halaman **Rekap Keuangan** (`/dashboard/rekap`) menggunakan grafik area/batang interaktif dari recharts (`components/chart-area-interactive.tsx`) untuk melacak performa keuangan 6 bulan terakhir.
+    2. `[x]` Membuat halaman **Similar Transactions** (`/dashboard/similar`) untuk mencari pencatatan ganda atau pengeluaran berulang dengan deskripsi yang sama.
+    3. `[x]` Mengimplementasikan **Trash Page** (`/dashboard/trash`) untuk memulihkan buku berstatus `is_deleted = 1` dengan pengecekan batas (maksimal 2 buku aktif untuk pengguna non-premium).
+    4. `[x]` Membuat modul **Export & Import Review**:
         *   Ekspor data menjadi file `.json` terunduh.
         *   Halaman tinjauan impor (`Import Review`) yang memvalidasi data JSON sebelum ditulis ke database IndexedDB.
 *   **Kriteria Selesai**: Grafik analitis keuangan menyajikan data dengan akurat, keranjang sampah bekerja sesuai skema soft-delete, dan file JSON ekspor-impor dapat dipulihkan dengan aman.
