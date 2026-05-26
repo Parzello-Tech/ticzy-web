@@ -1,83 +1,38 @@
 "use client"
 
 import * as React from "react"
+import { useActiveBook } from "@/hooks/use-active-book"
+import { useLiveQuery } from "dexie-react-hooks"
+import { db, type Transaction } from "@/lib/db"
 import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type UniqueIdentifier,
-} from "@dnd-kit/core"
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
+  createTransaction,
+  updateTransaction,
+  softDeleteTransaction,
+  bulkSoftDeleteTransactions,
+  getSimilarTransactions,
+  type SimilarGroup
+} from "@/lib/db-helpers"
+import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
+
 import {
   flexRender,
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
   type ColumnFiltersState,
-  type Row,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
-import { toast } from "sonner"
-import { z } from "zod"
 
-import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import {
   Table,
   TableBody,
@@ -92,273 +47,408 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { IconGripVertical, IconCircleCheckFilled, IconLoader, IconDotsVertical, IconLayoutColumns, IconChevronDown, IconPlus, IconChevronsLeft, IconChevronLeft, IconChevronRight, IconChevronsRight, IconTrendingUp } from "@tabler/icons-react"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  IconDotsVertical,
+  IconChevronDown,
+  IconPlus,
+  IconChevronLeft,
+  IconChevronRight,
+  IconTrash,
+  IconSearch,
+  IconEdit,
+  IconCloudCheck,
+  IconDeviceFloppy,
+  IconCalendar,
+  IconCheck,
+  IconSparkles
+} from "@tabler/icons-react"
 
-export const schema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
-})
+export function DataTable() {
+  const { activeBookId } = useActiveBook()
+  
+  // ----------------------------------------------------
+  // Live State Queries (IndexedDB)
+  // ----------------------------------------------------
+  
+  // Fetch transactions for the active book reactively
+  const transactions = useLiveQuery(
+    () => activeBookId 
+      ? db.transactions
+          .where("book_id")
+          .equals(activeBookId)
+          .and(tx => tx.is_deleted === 0)
+          .reverse()
+          .sortBy("transaction_date")
+      : Promise.resolve([] as Transaction[]),
+    [activeBookId]
+  ) || []
 
-// Create a separate component for the drag handle
-function DragHandle({ id }: { id: number }) {
-  const { attributes, listeners } = useSortable({
-    id,
-  })
+  // Fetch similar transaction groups for autofill suggestions
+  const similarGroups = useLiveQuery(
+    () => activeBookId ? getSimilarTransactions(activeBookId) : Promise.resolve([]),
+    [activeBookId]
+  ) || []
 
-  return (
-    <Button
-      {...attributes}
-      {...listeners}
-      variant="ghost"
-      size="icon"
-      className="size-7 text-muted-foreground hover:bg-transparent"
-    >
-      <IconGripVertical className="size-3 text-muted-foreground" />
-      <span className="sr-only">Drag to reorder</span>
-    </Button>
-  )
-}
-
-const columns: ColumnDef<z.infer<typeof schema>>[] = [
-  {
-    id: "drag",
-    header: () => null,
-    cell: ({ row }) => <DragHandle id={row.original.id} />,
-  },
-  {
-    id: "select",
-    header: ({ table }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      </div>
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center justify-center">
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-        />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: "header",
-    header: "Header",
-    cell: ({ row }) => {
-      return <TableCellViewer item={row.original} />
-    },
-    enableHiding: false,
-  },
-  {
-    accessorKey: "type",
-    header: "Section Type",
-    cell: ({ row }) => (
-      <div className="w-32">
-        <Badge variant="outline" className="px-1.5 text-muted-foreground">
-          {row.original.type}
-        </Badge>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => (
-      <Badge variant="outline" className="px-1.5 text-muted-foreground">
-        {row.original.status === "Done" ? (
-          <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
-        ) : (
-          <IconLoader
-          />
-        )}
-        {row.original.status}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: "target",
-    header: () => <div className="w-full text-right">Target</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
-    ),
-  },
-  {
-    accessorKey: "limit",
-    header: () => <div className="w-full text-right">Limit</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
-  },
-  {
-    accessorKey: "reviewer",
-    header: "Reviewer",
-    cell: ({ row }) => {
-      const isAssigned = row.original.reviewer !== "Assign reviewer"
-
-      if (isAssigned) {
-        return row.original.reviewer
-      }
-
-      return (
-        <>
-          <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Reviewer
-          </Label>
-          <Select>
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              id={`${row.original.id}-reviewer`}
-            >
-              <SelectValue placeholder="Assign reviewer" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectGroup>
-                <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                <SelectItem value="Jamik Tashpulatov">
-                  Jamik Tashpulatov
-                </SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </>
-      )
-    },
-  },
-  {
-    id: "actions",
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex size-8 text-muted-foreground data-[state=open]:bg-muted"
-            size="icon"
-          >
-            <IconDotsVertical
-            />
-            <span className="sr-only">Open menu</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
-  },
-]
-
-function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
-  const { transform, transition, setNodeRef, isDragging } = useSortable({
-    id: row.original.id,
-  })
-
-  return (
-    <TableRow
-      data-state={row.getIsSelected() && "selected"}
-      data-dragging={isDragging}
-      ref={setNodeRef}
-      className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition: transition,
-      }}
-    >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell key={cell.id}>
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </TableCell>
-      ))}
-    </TableRow>
-  )
-}
-
-export function DataTable({
-  data: initialData,
-}: {
-  data: z.infer<typeof schema>[]
-}) {
-  const [data, setData] = React.useState(() => initialData)
+  // ----------------------------------------------------
+  // React Table States
+  // ----------------------------------------------------
   const [rowSelection, setRowSelection] = React.useState({})
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  )
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
   })
-  const sortableId = React.useId()
-  const sensors = useSensors(
-    useSensor(MouseSensor, {}),
-    useSensor(TouchSensor, {}),
-    useSensor(KeyboardSensor, {})
-  )
 
-  const dataIds = React.useMemo<UniqueIdentifier[]>(
-    () => data?.map(({ id }) => id) || [],
-    [data]
-  )
+  // Filter tab state (Semua, Pemasukan, Pengeluaran)
+  const [typeFilter, setTypeFilter] = React.useState<"all" | "income" | "expense">("all")
 
+  // Search input query
+  const [searchQuery, setSearchQuery] = React.useState("")
+
+  // Filtered transactions computed based on Search and Tab selections
+  const filteredData = React.useMemo(() => {
+    return transactions.filter(tx => {
+      const matchesSearch = (tx.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesType = typeFilter === "all" ? true : tx.type === typeFilter
+      return matchesSearch && matchesType
+    })
+  }, [transactions, searchQuery, typeFilter])
+
+  // Reset page when filter changes
+  React.useEffect(() => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 }))
+  }, [searchQuery, typeFilter])
+
+  // ----------------------------------------------------
+  // Dialog (Create / Edit) Form States
+  // ----------------------------------------------------
+  const [isFormOpen, setIsFormOpen] = React.useState(false)
+  const [editingTx, setEditingTx] = React.useState<Transaction | null>(null)
+  
+  const [txType, setTxType] = React.useState<"income" | "expense">("expense")
+  const [txDate, setTxDate] = React.useState("")
+  const [txDesc, setTxDesc] = React.useState("")
+  const [txAmount, setTxAmount] = React.useState("")
+
+  // Quick suggestions based on autocomplete query
+  const autocompleteSuggestions = React.useMemo(() => {
+    if (!txDesc.trim()) return []
+    // Filter groups where description matches
+    return similarGroups
+      .filter(g => g.description.toLowerCase().includes(txDesc.toLowerCase()))
+      .slice(0, 3)
+  }, [similarGroups, txDesc])
+
+  // Populate form for creation or editing
+  const openCreateForm = () => {
+    setEditingTx(null)
+    setTxType("expense")
+    
+    // Set date input local value: YYYY-MM-DD
+    const localDate = new Date().toISOString().split("T")[0]
+    setTxDate(localDate)
+    
+    setTxDesc("")
+    setTxAmount("")
+    setIsFormOpen(true)
+  }
+
+  const openEditForm = (tx: Transaction) => {
+    setEditingTx(tx)
+    setTxType(tx.type)
+    
+    // Slice date to YYYY-MM-DD for standard input
+    setTxDate(tx.transaction_date.slice(0, 10))
+    
+    setTxDesc(tx.description || "")
+    setTxAmount(tx.amount.toString())
+    setIsFormOpen(true)
+  }
+
+  // Handle Form Submission
+  const handleSaveTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!txDate) {
+      toast.error("Tanggal transaksi harus diisi!")
+      return
+    }
+    if (!txDesc.trim()) {
+      toast.error("Deskripsi transaksi harus diisi!")
+      return
+    }
+    const amountVal = parseFloat(txAmount)
+    if (isNaN(amountVal) || amountVal <= 0) {
+      toast.error("Nominal transaksi harus berupa angka positif!")
+      return
+    }
+
+    if (!activeBookId) {
+      toast.error("Buku keuangan tidak valid!")
+      return
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const userId = session?.user?.id || null
+
+      const isoDateTime = new Date(txDate).toISOString()
+
+      if (editingTx) {
+        // Update
+        await updateTransaction(editingTx.id, {
+          transaction_date: isoDateTime,
+          description: txDesc.trim(),
+          amount: amountVal,
+          type: txType,
+          user_id: userId,
+        })
+        toast.success("Catatan transaksi berhasil diperbarui!")
+      } else {
+        // Create
+        await createTransaction({
+          book_id: activeBookId,
+          transaction_date: isoDateTime,
+          description: txDesc.trim(),
+          amount: amountVal,
+          type: txType,
+          user_id: userId,
+        })
+        toast.success("Transaksi baru berhasil dicatat!")
+      }
+      setIsFormOpen(false)
+    } catch (err: any) {
+      toast.error("Gagal menyimpan transaksi: " + err.message)
+    }
+  }
+
+  // Handle Individual Soft-Delete
+  const handleDeleteTransaction = async (id: string) => {
+    if (confirm("Apakah Anda yakin ingin menghapus transaksi ini?")) {
+      try {
+        await softDeleteTransaction(id)
+        toast.success("Transaksi berhasil dihapus.")
+      } catch (err: any) {
+        toast.error("Gagal menghapus transaksi: " + err.message)
+      }
+    }
+  }
+
+  // Handle Bulk Soft-Delete
+  const handleBulkDelete = async () => {
+    const selectedIds = Object.keys(rowSelection).map(
+      (idx) => filteredData[parseInt(idx)].id
+    )
+
+    if (selectedIds.length === 0) return
+
+    if (confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} transaksi terpilih secara massal?`)) {
+      try {
+        await bulkSoftDeleteTransactions(selectedIds)
+        setRowSelection({})
+        toast.success(`${selectedIds.length} transaksi berhasil dihapus!`)
+      } catch (err: any) {
+        toast.error("Gagal menghapus massal: " + err.message)
+      }
+    }
+  }
+
+  // Apply quick autocomplete suggestion
+  const handleApplySuggestion = (group: SimilarGroup) => {
+    setTxDesc(group.description)
+    // Find average or most recent amount in the group
+    const avgAmount = group.transactions.length > 0 
+      ? group.transactions[0].amount 
+      : 0
+    setTxAmount(avgAmount.toString())
+    toast.info(`Smart autofill: mengisi nominal Rp ${new Intl.NumberFormat("id-ID").format(avgAmount)}`)
+  }
+
+  // ----------------------------------------------------
+  // React Table Columns Definition
+  // ----------------------------------------------------
+  const columns = React.useMemo<ColumnDef<Transaction>[]>(() => [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Pilih semua"
+          />
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Pilih baris"
+          />
+        </div>
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "transaction_date",
+      header: "Tanggal",
+      cell: ({ row }) => {
+        const date = new Date(row.original.transaction_date)
+        return (
+          <div className="flex items-center gap-1.5 font-medium text-xs whitespace-nowrap text-muted-foreground">
+            <IconCalendar className="size-3.5" />
+            {date.toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "description",
+      header: "Deskripsi",
+      cell: ({ row }) => (
+        <span className="font-semibold text-sm text-foreground">
+          {row.original.description || "-"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "type",
+      header: "Tipe Kas",
+      cell: ({ row }) => {
+        const isIncome = row.original.type === "income"
+        return (
+          <Badge
+            variant="outline"
+            className={`font-semibold px-2 py-0.5 border-dashed select-none ${
+              isIncome 
+                ? "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" 
+                : "bg-rose-500/5 text-rose-600 dark:text-rose-400 border-rose-500/30"
+            }`}
+          >
+            {isIncome ? "Masuk" : "Keluar"}
+          </Badge>
+        )
+      },
+    },
+    {
+      accessorKey: "amount",
+      header: "Nominal",
+      cell: ({ row }) => {
+        const amount = row.original.amount
+        const isIncome = row.original.type === "income"
+        const formatted = new Intl.NumberFormat("id-ID", {
+          style: "currency",
+          currency: "IDR",
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }).format(amount)
+
+        return (
+          <span className={`font-bold tabular-nums text-sm ${isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
+            {isIncome ? `+ ${formatted}` : `- ${formatted}`}
+          </span>
+        )
+      },
+    },
+    {
+      accessorKey: "is_synced",
+      header: "Sync Status",
+      cell: ({ row }) => {
+        const isSynced = row.original.is_synced === 1
+        return (
+          <Badge
+            variant="outline"
+            className={`font-medium gap-1 select-none px-2 py-0.5 ${
+              isSynced 
+                ? "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
+                : "bg-amber-500/5 text-amber-600 dark:text-amber-500 border-amber-500/20"
+            }`}
+          >
+            {isSynced ? (
+              <>
+                <IconCloudCheck className="size-3.5 text-emerald-500" />
+                <span>Synced</span>
+              </>
+            ) : (
+              <>
+                <IconDeviceFloppy className="size-3.5 text-amber-500" />
+                <span>Lokal</span>
+              </>
+            )}
+          </Badge>
+        )
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="flex size-8 text-muted-foreground hover:bg-muted cursor-pointer"
+              size="icon"
+            >
+              <IconDotsVertical className="size-4" />
+              <span className="sr-only">Menu Aksi</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32 rounded-xl">
+            <DropdownMenuItem onClick={() => openEditForm(row.original)} className="cursor-pointer gap-2 py-2">
+              <IconEdit className="size-4 text-primary" />
+              <span>Edit Kas</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => handleDeleteTransaction(row.original.id)} 
+              className="cursor-pointer text-destructive focus:text-destructive gap-2 py-2"
+            >
+              <IconTrash className="size-4 text-destructive" />
+              <span>Hapus Kas</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ], [filteredData])
+
+  // Table instance hook
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: {
       sorting,
@@ -367,7 +457,7 @@ export function DataTable({
       columnFilters,
       pagination,
     },
-    getRowId: (row) => row.id.toString(),
+    getRowId: (_, index) => index.toString(),
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -378,436 +468,313 @@ export function DataTable({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (active && over && active.id !== over.id) {
-      setData((data) => {
-        const oldIndex = dataIds.indexOf(active.id)
-        const newIndex = dataIds.indexOf(over.id)
-        return arrayMove(data, oldIndex, newIndex)
-      })
-    }
-  }
+  const selectedCount = Object.keys(rowSelection).length
 
   return (
-    <Tabs
-      defaultValue="outline"
-      className="w-full flex-col justify-start gap-6"
-    >
-      <div className="flex items-center justify-between px-4 lg:px-6">
-        <Label htmlFor="view-selector" className="sr-only">
-          View
-        </Label>
-        <Select defaultValue="outline">
-          <SelectTrigger
-            className="flex w-fit @4xl/main:hidden"
-            size="sm"
-            id="view-selector"
-          >
-            <SelectValue placeholder="Select a view" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="outline">Outline</SelectItem>
-              <SelectItem value="past-performance">Past Performance</SelectItem>
-              <SelectItem value="key-personnel">Key Personnel</SelectItem>
-              <SelectItem value="focus-documents">Focus Documents</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <TabsList className="hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:px-1 @4xl/main:flex">
-          <TabsTrigger value="outline">Outline</TabsTrigger>
-          <TabsTrigger value="past-performance">
-            Past Performance <Badge variant="secondary">3</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="key-personnel">
-            Key Personnel <Badge variant="secondary">2</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
-        </TabsList>
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <IconLayoutColumns data-icon="inline-start" />
-                Columns
-                <IconChevronDown data-icon="inline-end" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
-              {table
-                .getAllColumns()
-                .filter(
-                  (column) =>
-                    typeof column.accessorFn !== "undefined" &&
-                    column.getCanHide()
-                )
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  )
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="outline" size="sm">
-            <IconPlus
-            />
-            <span className="hidden lg:inline">Add Section</span>
-          </Button>
-        </div>
-      </div>
-      <TabsContent
-        value="outline"
-        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+    <div className="w-full flex flex-col gap-6">
+      {/* ----------------------------------------------------
+          Header Filters & Add Trigger Controls
+          ---------------------------------------------------- */}
+      <Tabs
+        value={typeFilter}
+        onValueChange={(val) => setTypeFilter(val as any)}
+        className="w-full flex-col justify-start gap-4"
       >
-        <div className="overflow-hidden rounded-lg border">
-          <DndContext
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
-            onDragEnd={handleDragEnd}
-            sensors={sensors}
-            id={sortableId}
-          >
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 px-4 lg:px-6">
+          {/* Left search & filter controls */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-2xl">
+            <div className="relative flex-1">
+              <IconSearch className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari transaksi berdasarkan deskripsi..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+            
+            <TabsList className="h-9 *:data-[slot=tabs-trigger]:px-4">
+              <TabsTrigger value="all">Semua</TabsTrigger>
+              <TabsTrigger value="income" className="text-emerald-500 focus:text-emerald-600">Masuk</TabsTrigger>
+              <TabsTrigger value="expense" className="text-rose-500 focus:text-rose-600">Keluar</TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Right action controls */}
+          <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+            {/* Columns hide dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 cursor-pointer">
+                  <span>Kolom</span>
+                  <IconChevronDown className="size-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                {table
+                  .getAllColumns()
+                  .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide())
+                  .map((column) => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize cursor-pointer"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                      >
+                        {column.id === "transaction_date" ? "Tanggal" : column.id === "description" ? "Deskripsi" : column.id === "is_synced" ? "Sync Status" : column.id}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Bulk delete action trigger */}
+            {selectedCount > 0 && (
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={handleBulkDelete}
+                className="h-9 gap-1.5 shadow-sm font-semibold cursor-pointer animate-in fade-in zoom-in-95 duration-100"
+              >
+                <IconTrash className="size-4" />
+                <span>Hapus ({selectedCount})</span>
+              </Button>
+            )}
+
+            {/* Create transaction button */}
+            <Button size="sm" onClick={openCreateForm} className="h-9 gap-1.5 shadow-sm font-semibold cursor-pointer">
+              <IconPlus className="size-4" />
+              <span>Tambah Transaksi</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------
+            Primary Cash Book Data Table View
+            ---------------------------------------------------- */}
+        <TabsContent value={typeFilter} className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+          <div className="overflow-hidden rounded-xl border bg-card/50 backdrop-blur-md">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-muted">
+              <TableHeader className="bg-muted/50">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => {
-                      return (
-                        <TableHead key={header.id} colSpan={header.colSpan}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      )
-                    })}
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} className="font-semibold text-foreground text-xs py-3 h-auto">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
                   </TableRow>
                 ))}
               </TableHeader>
-              <TableBody className="**:data-[slot=table-cell]:first:w-8">
+              <TableBody>
                 {table.getRowModel().rows?.length ? (
-                  <SortableContext
-                    items={dataIds}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {table.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} />
-                    ))}
-                  </SortableContext>
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} className="hover:bg-muted/30">
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className="py-2.5">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
                 ) : (
                   <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="h-24 text-center"
-                    >
-                      No results.
+                    <TableCell colSpan={columns.length} className="h-32 text-center text-muted-foreground font-medium text-sm">
+                      Belum ada catatan kas transaksi ditemukan.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-          </DndContext>
-        </div>
-        <div className="flex items-center justify-between px-4">
-          <div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
           </div>
-          <div className="flex w-full items-center gap-8 lg:w-fit">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
-              </Label>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => {
-                  table.setPageSize(Number(value))
-                }}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue
-                    placeholder={table.getState().pagination.pageSize}
-                  />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  <SelectGroup>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between px-2 pt-2">
+            <div className="hidden flex-1 text-xs font-medium text-muted-foreground lg:flex">
+              {table.getFilteredSelectedRowModel().rows.length} dari {table.getFilteredRowModel().rows.length} transaksi terpilih.
+            </div>
+            
+            <div className="flex w-full items-center justify-between sm:justify-end gap-6 lg:w-fit">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="rows-per-page" className="text-xs font-semibold text-muted-foreground">
+                  Baris per halaman
+                </Label>
+                <Select
+                  value={`${table.getState().pagination.pageSize}`}
+                  onValueChange={(value) => table.setPageSize(Number(value))}
+                >
+                  <SelectTrigger size="sm" className="w-16 h-8 text-xs font-medium" id="rows-per-page">
+                    <SelectValue placeholder={table.getState().pagination.pageSize} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
                     {[10, 20, 30, 40, 50].map((pageSize) => (
-                      <SelectItem key={pageSize} value={`${pageSize}`}>
+                      <SelectItem key={pageSize} value={`${pageSize}`} className="text-xs">
                         {pageSize}
                       </SelectItem>
                     ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount()}
-            </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
-              <Button
-                variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to first page</span>
-                <IconChevronsLeft
-                />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to previous page</span>
-                <IconChevronLeft
-                />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to next page</span>
-                <IconChevronRight
-                />
-              </Button>
-              <Button
-                variant="outline"
-                className="hidden size-8 lg:flex"
-                size="icon"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to last page</span>
-                <IconChevronsRight
-                />
-              </Button>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex w-fit items-center justify-center text-xs font-semibold text-muted-foreground">
+                Halaman {table.getState().pagination.pageIndex + 1} dari {table.getPageCount() || 1}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  className="size-8"
+                  size="icon"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">Sebelumnya</span>
+                  <IconChevronLeft className="size-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="size-8"
+                  size="icon"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Berikutnya</span>
+                  <IconChevronRight className="size-4" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </TabsContent>
-      <TabsContent
-        value="past-performance"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-      <TabsContent
-        value="focus-documents"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-    </Tabs>
-  )
-}
+        </TabsContent>
+      </Tabs>
 
-const chartData = [
-  { month: "January", desktop: 186, mobile: 80 },
-  { month: "February", desktop: 305, mobile: 200 },
-  { month: "March", desktop: 237, mobile: 120 },
-  { month: "April", desktop: 73, mobile: 190 },
-  { month: "May", desktop: 209, mobile: 130 },
-  { month: "June", desktop: 214, mobile: 140 },
-]
+      {/* ----------------------------------------------------
+          Unified Transaction Modal Sheet Form (Dialog)
+          ---------------------------------------------------- */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl">
+          <form onSubmit={handleSaveTransaction}>
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold">
+                {editingTx ? "Edit Transaksi Kas" : "Tambah Transaksi Kas Baru"}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                {editingTx 
+                  ? "Perbarui rincian kas masuk atau kas keluar terdaftar Anda di bawah ini." 
+                  : "Catat pengeluaran atau pemasukan baru ke dalam buku kas keuangan Anda."}
+              </DialogDescription>
+            </DialogHeader>
 
-const chartConfig = {
-  desktop: {
-    label: "Desktop",
-    color: "var(--primary)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--primary)",
-  },
-} satisfies ChartConfig
-
-function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
-  const isMobile = useIsMobile()
-
-  return (
-    <Drawer direction={isMobile ? "bottom" : "right"}>
-      <DrawerTrigger asChild>
-        <Button variant="link" className="w-fit px-0 text-left text-foreground">
-          {item.header}
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.header}</DrawerTitle>
-          <DrawerDescription>
-            Showing total visitors for the last 6 months
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          {!isMobile && (
-            <>
-              <ChartContainer config={chartConfig}>
-                <AreaChart
-                  accessibilityLayer
-                  data={chartData}
-                  margin={{
-                    left: 0,
-                    right: 10,
-                  }}
+            <div className="grid gap-4 py-4 text-sm">
+              {/* Tipe Transaksi: Tabs Trigger */}
+              <div className="grid gap-1.5">
+                <Label>Tipe Transaksi</Label>
+                <Tabs 
+                  value={txType} 
+                  onValueChange={(val) => setTxType(val as any)} 
+                  className="w-full"
                 >
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    tickFormatter={(value) => value.slice(0, 3)}
-                    hide
+                  <TabsList className="grid w-full grid-cols-2 h-9">
+                    <TabsTrigger value="expense" className="text-rose-500 font-semibold cursor-pointer">Pengeluaran</TabsTrigger>
+                    <TabsTrigger value="income" className="text-emerald-500 font-semibold cursor-pointer">Pemasukan</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Tanggal Picker */}
+              <div className="grid gap-1.5">
+                <Label htmlFor="txDate">Tanggal Transaksi</Label>
+                <Input
+                  id="txDate"
+                  type="date"
+                  value={txDate}
+                  onChange={(e) => setTxDate(e.target.value)}
+                  className="h-9"
+                  required
+                />
+              </div>
+
+              {/* Deskripsi dengan Autocomplete */}
+              <div className="grid gap-1.5 relative">
+                <Label htmlFor="txDesc">Deskripsi Transaksi</Label>
+                <Input
+                  id="txDesc"
+                  value={txDesc}
+                  onChange={(e) => setTxDesc(e.target.value)}
+                  placeholder="Contoh: Beli Makan Siang, Kopi, Gaji Bulanan"
+                  className="h-9"
+                  required
+                  maxLength={64}
+                />
+                
+                {/* Autocomplete Quick Suggestions */}
+                {autocompleteSuggestions.length > 0 && (
+                  <div className="flex flex-col gap-1.5 mt-1 animate-in slide-in-from-top-1 duration-75">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-semibold">
+                      <IconSparkles className="size-3 text-amber-500" />
+                      Saran Transaksi Serupa:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {autocompleteSuggestions.map((group, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleApplySuggestion(group)}
+                          className="text-xs bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 px-2 py-1 rounded-full cursor-pointer flex items-center gap-1.5 font-medium transition-all"
+                        >
+                          <span>{group.description}</span>
+                          <span className="font-semibold text-[10px] opacity-75">
+                            (Rp {new Intl.NumberFormat("id-ID").format(group.transactions[0].amount)})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Nominal Input */}
+              <div className="grid gap-1.5">
+                <Label htmlFor="txAmount">Nominal Transaksi (Rupiah)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-xs font-semibold text-muted-foreground select-none">
+                    Rp
+                  </span>
+                  <Input
+                    id="txAmount"
+                    type="number"
+                    value={txAmount}
+                    onChange={(e) => setTxAmount(e.target.value)}
+                    placeholder="Contoh: 25000"
+                    className="pl-9 h-9 font-semibold"
+                    min="1"
+                    required
                   />
-                  <ChartTooltip
-                    cursor={false}
-                    content={<ChartTooltipContent indicator="dot" />}
-                  />
-                  <Area
-                    dataKey="mobile"
-                    type="natural"
-                    fill="var(--color-mobile)"
-                    fillOpacity={0.6}
-                    stroke="var(--color-mobile)"
-                    stackId="a"
-                  />
-                  <Area
-                    dataKey="desktop"
-                    type="natural"
-                    fill="var(--color-desktop)"
-                    fillOpacity={0.4}
-                    stroke="var(--color-desktop)"
-                    stackId="a"
-                  />
-                </AreaChart>
-              </ChartContainer>
-              <Separator />
-              <div className="grid gap-2">
-                <div className="flex gap-2 leading-none font-medium">
-                  Trending up by 5.2% this month{" "}
-                  <IconTrendingUp className="size-4" />
                 </div>
-                <div className="text-muted-foreground">
-                  Showing total visitors for the last 6 months. This is just
-                  some random text to test the layout. It spans multiple lines
-                  and should wrap around.
-                </div>
-              </div>
-              <Separator />
-            </>
-          )}
-          <form className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="header">Header</Label>
-              <Input id="header" defaultValue={item.header} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
-                <Select defaultValue={item.type}>
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="Table of Contents">
-                        Table of Contents
-                      </SelectItem>
-                      <SelectItem value="Executive Summary">
-                        Executive Summary
-                      </SelectItem>
-                      <SelectItem value="Technical Approach">
-                        Technical Approach
-                      </SelectItem>
-                      <SelectItem value="Design">Design</SelectItem>
-                      <SelectItem value="Capabilities">Capabilities</SelectItem>
-                      <SelectItem value="Focus Documents">
-                        Focus Documents
-                      </SelectItem>
-                      <SelectItem value="Narrative">Narrative</SelectItem>
-                      <SelectItem value="Cover Page">Cover Page</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
-                <Select defaultValue={item.status}>
-                  <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="Done">Done</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Not Started">Not Started</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="target">Target</Label>
-                <Input id="target" defaultValue={item.target} />
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="limit">Limit</Label>
-                <Input id="limit" defaultValue={item.limit} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="reviewer">Reviewer</Label>
-              <Select defaultValue={item.reviewer}>
-                <SelectTrigger id="reviewer" className="w-full">
-                  <SelectValue placeholder="Select a reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                    <SelectItem value="Jamik Tashpulatov">
-                      Jamik Tashpulatov
-                    </SelectItem>
-                    <SelectItem value="Emily Whalen">Emily Whalen</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsFormOpen(false)}
+                className="cursor-pointer"
+              >
+                Batal
+              </Button>
+              <Button type="submit" className="cursor-pointer font-semibold gap-1.5">
+                <IconCheck className="size-4" />
+                <span>Simpan Transaksi</span>
+              </Button>
+            </DialogFooter>
           </form>
-        </div>
-        <DrawerFooter>
-          <Button>Submit</Button>
-          <DrawerClose asChild>
-            <Button variant="outline">Done</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

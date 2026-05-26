@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Outfit, Space_Grotesk } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { BookProvider } from "@/lib/context/book-context"
 import { cn } from "@/lib/utils";
 
 const spaceGroteskHeading = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
@@ -28,7 +29,9 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <TooltipProvider>
-            {children}
+            <BookProvider>
+              {children}
+            </BookProvider>
           </TooltipProvider>
         </ThemeProvider>
       </body>

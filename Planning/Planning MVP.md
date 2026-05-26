@@ -135,14 +135,14 @@ gantt
 ### MILESTONE 3: Pembangunan Core Dashboard & Data Table UI
 *   **Tujuan**: Membuat antarmuka pengguna utama dengan widget transaksi, multi-book switcher, dan tabel interaktif yang premium.
 *   **Daftar Tugas**:
-    1. `[ ]` Kustomisasi Sidebar (`components/app-sidebar.tsx`) untuk mendukung pemilihan buku dinamis, badge status sinkronisasi, dan tombol pemicu sinkronisasi manual.
-    2. `[ ]` Modifikasi `components/section-cards.tsx` untuk menampilkan:
+    1. `[x]` Kustomisasi Sidebar (`components/app-sidebar.tsx`) untuk mendukung pemilihan buku dinamis, badge status sinkronisasi, dan tombol pemicu sinkronisasi manual.
+    2. `[x]` Modifikasi `components/section-cards.tsx` untuk menampilkan:
         *   Total Saldo Buku Aktif
         *   Total Pemasukan Bulan Ini
         *   Total Pengeluaran Bulan Ini
         *   Selisih Bersih (Cash Flow)
-    3. `[ ]` Integrasi lembar tambah transaksi instan menggunakan shadcn `Dialog` atau `Drawer` responsif (meniru WoltModalSheet di Flutter).
-    4. `[ ]` Mengadaptasi `components/data-table.tsx` untuk memuat transaksi riil dari IndexedDB, mendukung penapisan (filter) berdasarkan tanggal/tipe, serta multi-select untuk penghapusan/edit massal (*batch operations*).
+    3. `[x]` Integrasi lembar tambah transaksi instan menggunakan shadcn `Dialog` atau `Drawer` responsif (meniru WoltModalSheet di Flutter).
+    4. `[x]` Mengadaptasi `components/data-table.tsx` untuk memuat transaksi riil dari IndexedDB, mendukung penapisan (filter) berdasarkan tanggal/tipe, serta multi-select untuk penghapusan/edit massal (*batch operations*).
 *   **Kriteria Selesai**: Dasbor utama menampilkan data riil dari buku yang dipilih. Pengguna dapat menambah, mengedit, memfilter, dan melakukan operasi massal pada transaksi secara visual.
 
 ### MILESTONE 4: Fitur Lanjutan (Statistik, Trash, & Ekspor-Impor)
