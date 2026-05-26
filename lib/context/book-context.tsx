@@ -46,6 +46,34 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
     [activeBookId]
   ) || null;
 
+  // Auto-create default book if no active books exist
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const ensureDefaultBook = async () => {
+      const activeCount = await db.books.where("is_deleted").equals(0).count();
+      if (activeCount === 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || null;
+        
+        await db.books.add({
+          id: crypto.randomUUID(),
+          name: "Buku Utama",
+          description: "Buku utama bawaan yang tidak dapat dihapus",
+          color: 4279031273, // Sky Blue default
+          icon: "IconWallet",
+          user_id: userId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_synced: 0,
+          is_deleted: 0,
+        });
+      }
+    };
+
+    ensureDefaultBook();
+  }, [books, isMounted]);
+
   // Auto-switch to first available book if nothing selected or book is deleted/not found
   useEffect(() => {
     if (!isMounted || books.length === 0) return;

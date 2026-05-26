@@ -63,55 +63,7 @@ export class TiczyDatabase extends Dexie {
       is_deleted: 0,
     };
 
-    const sampleTransactions: Transaction[] = [
-      {
-        id: crypto.randomUUID(),
-        user_id: null,
-        transaction_date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        description: "Gaji Bulanan",
-        amount: 5000000,
-        type: "income",
-        book_id: defaultBookId,
-        is_synced: 0,
-        is_deleted: 0,
-      },
-      {
-        id: crypto.randomUUID(),
-        user_id: null,
-        transaction_date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        description: "Beli Kopi Susu",
-        amount: 25000,
-        type: "expense",
-        book_id: defaultBookId,
-        is_synced: 0,
-        is_deleted: 0,
-      },
-      {
-        id: crypto.randomUUID(),
-        user_id: null,
-        transaction_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-        description: "Makan Siang",
-        amount: 45000,
-        type: "expense",
-        book_id: defaultBookId,
-        is_synced: 0,
-        is_deleted: 0,
-      },
-      {
-        id: crypto.randomUUID(),
-        user_id: null,
-        transaction_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
-        description: "Sewa Kost",
-        amount: 1500000,
-        type: "expense",
-        book_id: defaultBookId,
-        is_synced: 0,
-        is_deleted: 0,
-      },
-    ];
-
     await this.books.add(defaultBook);
-    await this.transactions.bulkAdd(sampleTransactions);
   }
 }
 

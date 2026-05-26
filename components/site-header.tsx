@@ -8,12 +8,19 @@ import { syncAll, checkConnectivity } from "@/lib/sync"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { IconRefresh, IconCloud, IconCloudOff } from "@tabler/icons-react"
+import { useTheme } from "next-themes"
+import { IconRefresh, IconCloud, IconCloudOff, IconSun, IconMoon } from "@tabler/icons-react"
 
 export function SiteHeader() {
   const { activeBook } = useActiveBook()
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isOnline, setIsOnline] = React.useState(true)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Periodically check connectivity
   React.useEffect(() => {
@@ -102,6 +109,21 @@ export function SiteHeader() {
               </>
             )}
           </div>
+
+          {/* Theme Toggle Button */}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            className="h-8 w-8 hover:bg-accent cursor-pointer shrink-0 rounded-lg"
+            title="Toggle theme"
+          >
+            {mounted && resolvedTheme === "dark" ? (
+              <IconSun className="size-4 text-amber-500" />
+            ) : (
+              <IconMoon className="size-4 text-indigo-500" />
+            )}
+          </Button>
 
           {/* Sync Trigger Button */}
           <Button

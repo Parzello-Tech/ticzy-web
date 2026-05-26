@@ -142,6 +142,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const handleDeleteBook = async (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation() // Prevent dropdown closing or book switching
     
+    if (name === "Buku Utama") {
+      toast.error("Buku utama bawaan tidak dapat dihapus!")
+      return
+    }
+
     if (books.length <= 1) {
       toast.error("Minimal harus menyisakan 1 buku keuangan aktif!")
       return
@@ -225,15 +230,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           {isActive && (
                             <IconCheck className="size-4 text-primary shrink-0" />
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => handleDeleteBook(e, b.id, b.name)}
-                          >
-                            <IconTrash className="size-3" />
-                            <span className="sr-only">Hapus</span>
-                          </Button>
+                          {b.name !== "Buku Utama" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => handleDeleteBook(e, b.id, b.name)}
+                            >
+                              <IconTrash className="size-3" />
+                              <span className="sr-only">Hapus</span>
+                            </Button>
+                          )}
                         </div>
                       </DropdownMenuItem>
                     )
