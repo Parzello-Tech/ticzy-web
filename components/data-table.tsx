@@ -83,10 +83,17 @@ import {
   IconDeviceFloppy,
   IconCalendar,
   IconCheck,
-  IconSparkles
+  IconSparkles,
+  IconX
 } from "@tabler/icons-react"
 
-export function DataTable() {
+export function DataTable({
+  searchQuery: externalSearchQuery,
+  setSearchQuery: externalSetSearchQuery
+}: {
+  searchQuery?: string
+  setSearchQuery?: (val: string) => void
+} = {}) {
   const { activeBookId } = useActiveBook()
   
   // ----------------------------------------------------
@@ -127,22 +134,42 @@ export function DataTable() {
   // Filter tab state (Semua, Pemasukan, Pengeluaran)
   const [typeFilter, setTypeFilter] = React.useState<"all" | "income" | "expense">("all")
 
-  // Search input query
-  const [searchQuery, setSearchQuery] = React.useState("")
+  // Search input query with external fallback support
+  const [localSearchQuery, setLocalSearchQuery] = React.useState("")
+  const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : localSearchQuery
+  const setSearchQuery = externalSetSearchQuery !== undefined ? externalSetSearchQuery : setLocalSearchQuery
 
-  // Filtered transactions computed based on Search and Tab selections
+  // A tiny custom setter helper to support setting both local or external state cleanly
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val)
+  }
+
+  // 🚀 Performance Optimization: Debounce search query by 250ms to prevent heavy list re-filtering on every keystroke
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = React.useState(searchQuery)
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 250)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [searchQuery])
+
+  // Filtered transactions computed based on Search and Tab selections (Debounced)
   const filteredData = React.useMemo(() => {
     return transactions.filter(tx => {
-      const matchesSearch = (tx.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesSearch = (tx.description || "").toLowerCase().includes(debouncedSearchQuery.toLowerCase())
       const matchesType = typeFilter === "all" ? true : tx.type === typeFilter
       return matchesSearch && matchesType
     })
-  }, [transactions, searchQuery, typeFilter])
+  }, [transactions, debouncedSearchQuery, typeFilter])
 
-  // Reset page when filter changes
+  // Reset page when filter changes (Debounced)
   React.useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }))
-  }, [searchQuery, typeFilter])
+  }, [debouncedSearchQuery, typeFilter])
 
   // ----------------------------------------------------
   // Dialog (Create / Edit) Form States
@@ -189,6 +216,16 @@ export function DataTable() {
     setTxAmount(tx.amount.toString())
     setIsFormOpen(true)
   }
+
+  React.useEffect(() => {
+    const handleOpenCreate = () => {
+      openCreateForm()
+    }
+    window.addEventListener("ticzy-open-create-transaction", handleOpenCreate)
+    return () => {
+      window.removeEventListener("ticzy-open-create-transaction", handleOpenCreate)
+    }
+  }, [])
 
   // Handle Form Submission
   const handleSaveTransaction = async (e: React.FormEvent) => {
@@ -485,14 +522,23 @@ export function DataTable() {
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 px-4 lg:px-6">
           {/* Left search & filter controls */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-2xl">
-            <div className="relative flex-1">
+            <div className="relative flex-1 hidden md:block">
               <IconSearch className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
               <Input
                 placeholder="Cari transaksi berdasarkan deskripsi..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9"
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-9 pr-8 h-9"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearchChange("")}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer focus:outline-hidden"
+                  title="Bersihkan pencarian"
+                >
+                  <IconX className="size-4" />
+                </button>
+              )}
             </div>
             
             <TabsList className="h-9 *:data-[slot=tabs-trigger]:px-4">
@@ -556,7 +602,7 @@ export function DataTable() {
             Primary Cash Book Data Table View
             ---------------------------------------------------- */}
         <TabsContent value={typeFilter} className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
-          <div className="overflow-hidden rounded-xl border bg-card/50 backdrop-blur-md">
+          <div className="overflow-x-auto overflow-y-hidden rounded-xl border bg-card/50 backdrop-blur-md">
             <Table>
               <TableHeader className="bg-muted/50">
                 {table.getHeaderGroups().map((headerGroup) => (

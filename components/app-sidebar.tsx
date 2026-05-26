@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { MobileBottomNav } from "@/components/mobile-bottom-nav"
+import { FloatingAddBtn } from "@/components/floating-add-btn"
 import {
   Sidebar,
   SidebarContent,
@@ -172,7 +174,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const activeBookColorHex = getBookHex(activeBook?.color)
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <>
+      <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <SidebarMenu>
@@ -324,5 +327,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavUser />
       </SidebarFooter>
     </Sidebar>
+    <MobileBottomNav />
+    <FloatingAddBtn />
+    </>
   )
 }
