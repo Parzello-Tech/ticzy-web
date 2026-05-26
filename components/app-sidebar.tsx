@@ -38,6 +38,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useLang } from "@/hooks/use-lang"
 import { 
   IconDashboard, 
   IconListDetails, 
@@ -49,45 +50,9 @@ import {
   IconPlus, 
   IconCheck, 
   IconTrash,
-  IconWallet
+  IconWallet,
+  IconDownload
 } from "@tabler/icons-react"
-
-const sidebarData = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: <IconDashboard />,
-    },
-    {
-      title: "Rekap Bulanan",
-      url: "/dashboard/rekap",
-      icon: <IconChartBar />,
-    },
-    {
-      title: "Pembersih Duplikat",
-      url: "/dashboard/similar",
-      icon: <IconListDetails />,
-    },
-    {
-      title: "Keranjang Sampah",
-      url: "/dashboard/trash",
-      icon: <IconTrash />,
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Ekspor & Impor",
-      url: "/dashboard/export",
-      icon: <IconSettings />,
-    },
-    {
-      title: "Bantuan",
-      url: "#",
-      icon: <IconHelp />,
-    },
-  ],
-}
 
 // ARGB colors for the book switcher
 const colorPalette = [
@@ -100,6 +65,43 @@ const colorPalette = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { activeBookId, activeBook, books, switchBook } = useActiveBook()
+  const { lang } = useLang()
+
+  const navMain = React.useMemo(() => [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: <IconDashboard />,
+    },
+    {
+      title: lang === "id" ? "Rekap Bulanan" : "Monthly Recap",
+      url: "/dashboard/rekap",
+      icon: <IconChartBar />,
+    },
+    {
+      title: lang === "id" ? "Pembersih Duplikat" : "Duplicate Cleaner",
+      url: "/dashboard/similar",
+      icon: <IconListDetails />,
+    },
+    {
+      title: lang === "id" ? "Keranjang Sampah" : "Trash Center",
+      url: "/dashboard/trash",
+      icon: <IconTrash />,
+    },
+  ], [lang])
+
+  const navSecondary = React.useMemo(() => [
+    {
+      title: lang === "id" ? "Ekspor & Impor" : "Export & Import",
+      url: "/dashboard/export",
+      icon: <IconDownload />,
+    },
+    {
+      title: lang === "id" ? "Pengaturan" : "Settings",
+      url: "/dashboard/settings",
+      icon: <IconSettings />,
+    },
+  ], [lang])
   
   // State for creating new book
   const [isCreateOpen, setIsCreateOpen] = React.useState(false)
@@ -307,8 +309,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={sidebarData.navMain} />
-        <NavSecondary items={sidebarData.navSecondary} className="mt-auto" />
+        <NavMain items={navMain} />
+        <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
 
       <SidebarFooter>

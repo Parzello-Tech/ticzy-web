@@ -108,7 +108,7 @@ gantt
     section Milestone 4
     Statistik, Trash & Ex-Im     :done, m4, after m3, 4d
     section Milestone 5
-    Settings, Polishing & QA     :active, m5, after m4, 3d
+    Settings, Polishing & QA     :done, m5, after m4, 3d
 ```
 
 ### MILESTONE 1: Pondasi & Manajemen State Lokal (Offline-First Basis)
@@ -159,12 +159,12 @@ gantt
 ### MILESTONE 5: Preferensi, Polishing Visual, & QA Offline
 *   **Tujuan**: Menyempurnakan preferensi tema dasar, lokalisasi bahasa, transisi animasi, serta pengujian ketahanan offline.
 *   **Daftar Tugas**:
-    1. `[ ]` Menyesuaikan halaman **Settings** (`/dashboard/settings`):
+    1. `[x]` Menyesuaikan halaman **Settings** (`/dashboard/settings`):
         *   Saklar tema gelap/terang instan (`next-themes`).
         *   Color Seed Picker: mengubah variabel warna aksen dasar (variabel `--primary` oklch di `app/globals.css` secara dinamis melalui gaya CSS).
         *   Pilihan bahasa (ID / EN) menggunakan konteks lokalisasi sederhana.
-    2. `[ ]` Menambahkan efek micro-animations pada tombol transaksi dan loading state.
-    3. `[ ]` **Offline QA Audit**:
+    2. `[x]` Menambahkan efek micro-animations pada tombol transaksi dan loading state.
+    3. `[x]` **Offline QA Audit**:
         *   Menguji aplikasi dalam kondisi "Offline" (Network Throttling -> Offline di Chrome DevTools). Memastikan entri data tetap instan dan lancar.
         *   Mengaktifkan kembali koneksi internet dan menguji apakah Sync Engine secara otomatis mengirimkan antrean data yang belum disinkronkan ke Supabase.
 *   **Kriteria Selesai**: Dasbor web terasa sangat hidup, warna aksen dapat disesuaikan, aplikasi bekerja 100% lancar saat luring (offline), dan sinkronisasi otomatis menyelaraskan data dengan sempurna begitu daring (online) kembali.
